@@ -1,12 +1,16 @@
-# n8n Workflow Github Backup
+# n8n Workflows GitHub Manager
 
-> An automated **n8n workflow** that backs up all your n8n workflows to GitHub with intelligent change detection, creating a version-controlled backup system that syncs automatically.
+> A comprehensive **n8n workflow** that provides complete bidirectional sync between your n8n instance and GitHub - automatically backs up all your workflows with intelligent change detection AND restores them when needed.
 
 ![n8n](https://img.shields.io/badge/n8n-Workflow-EA4B71?logo=n8n)
 ![GitHub](https://img.shields.io/badge/GitHub-API-181717?logo=github)
 ![OAuth2](https://img.shields.io/badge/OAuth2-Authentication-2088FF)
+![Backup](https://img.shields.io/badge/Feature-Backup-28A745)
+![Restore](https://img.shields.io/badge/Feature-Restore-0366D6)
 
-This workflow automatically detects new, edited, renamed, and deleted workflows in your n8n instance, then syncs them to a GitHub repository with smart commit messages and an index tracking system.
+This workflow combines two powerful features in one:
+* **Backup**: Automatically detects new, edited, renamed, and deleted workflows in your n8n instance, then syncs them to GitHub with smart commit messages and an index tracking system.
+* **Restore**: Easily restore all workflows from your GitHub repository back to n8n - perfect for disaster recovery, new instance setup, or environment cloning.
 
 ![Preview Image](preview.png)
 
@@ -14,7 +18,9 @@ This workflow automatically detects new, edited, renamed, and deleted workflows 
 
 ## How It Works
 
-1. **Trigger**: The workflow runs automatically every day at 7 PM UTC (or manually when triggered).
+### 🔄 Backup Mode (Automatic)
+
+1. **Trigger**: Runs automatically every day at 7 PM UTC (or manually when triggered via the Schedule Trigger).
 2. **Get/Create Index**: Attempts to fetch `index.json` from your GitHub repository.
    * **If found** → Downloads and parses it.
    * **If not found** → Creates a new empty index file and waits 3 seconds for GitHub to process.
@@ -34,6 +40,18 @@ This workflow automatically detects new, edited, renamed, and deleted workflows 
    * **Delete Branch** → Removes workflow files from GitHub.
    * **Update Index Branch** → Updates `index.json` with latest mappings.
 6. **Commit Messages**: Auto-generated with format: `[Workflow Name] (Action) YYYY-MM-DD`
+
+### ⬇️ Restore Mode (Manual)
+
+1. **Trigger**: Manually execute via the "When clicking 'Execute workflow'" manual trigger.
+2. **Set GitHub Details**: Configure your repository owner and name.
+3. **List Workflow Files**: Fetches all workflow JSON files from the `workflows/` folder in your GitHub repository.
+   * **If folder not found** → Workflow stops gracefully (ensure backup ran at least once first).
+4. **Loop Through Files**: Sequentially processes each workflow file:
+   * Downloads the JSON content from GitHub.
+   * Creates the workflow in your n8n instance via the n8n API.
+5. **Sequential Processing**: Handles one workflow at a time to prevent conflicts and respect rate limits.
+6. **Result**: All workflows from GitHub are restored to your n8n instance.
 
 ---
 
@@ -57,12 +75,14 @@ This workflow automatically detects new, edited, renamed, and deleted workflows 
 
 ## How to Use
 
+### Initial Setup
+
 1. **Import the Workflow**:
    * Copy the provided JSON file.
    * In your n8n instance → click **Import Workflow** → paste or upload the JSON.
 
 2. **Create GitHub Repository**:
-   * Go to GitHub → Create a new repository (e.g., `n8n-workflows-backup`).
+   * Go to GitHub → Create a new repository (e.g., `n8n-workflows-manager`).
    * Leave it empty (no README, no .gitignore).
 
 3. **Set Up GitHub OAuth2**:
@@ -79,36 +99,49 @@ This workflow automatically detects new, edited, renamed, and deleted workflows 
    * Set **Base URL** to your n8n instance (e.g., `https://your-n8n.com`).
 
 5. **Configure Repository Details**:
-   * Find the **"Set Github Data"** node in the workflow.
-   * Edit the assignments:
+   * Find **both** "Set Github Data" nodes in the workflow (one for backup, one for restore).
+   * Edit the assignments in each:
      * `repo_owner`: Replace `"your-github-username"` with your GitHub username.
      * `repo_name`: Replace `"your-github-repository-name"` with your repository name.
 
 6. **Connect Credentials to Nodes**:
-   * Open each **GitHub node** (there are 6 total):
-     * Create Index File
-     * Get Download Url for Index File
-     * Create New Files
-     * Update Index File
-     * Get Download Url for Github File
-     * Delete Files
-     * Edit Files
+   * Open each **GitHub node** (there are 8 total):
+     * **Backup section**: Create Index File, Get Download Url for Index File, Create New Files, Update Index File, Get Download Url for Github File, Delete Files, Edit Files
+     * **Restore section**: List Workflow Files
    * Set **Credential for GitHub OAuth2** to the one you created.
-   * Open the **"Get All Workflows"** node → Set **Credential for n8n API** to the one you created.
+   * Open the **n8n API nodes** (Get All Workflows, Create Workflow) → Set **Credential for n8n API** to the one you created.
 
-7. **Test the Workflow**:
-   * Click the **"When clicking 'Execute workflow'"** manual trigger node.
+### Using Backup Mode
+
+7. **Test Backup**:
+   * Click the **"Schedule Trigger"** node at the top of the workflow.
    * Click **"Test workflow"**.
-   * Monitor execution → All nodes should turn green.
-   * Check your GitHub repository → Should see `index.json` and `workflows/` folder.
+   * Monitor execution → All nodes in the backup section should turn green.
+   * Check your GitHub repository → Should see `index.json` and `workflows/` folder with your workflows.
 
-8. **Activate for Auto Mode**:
+8. **Activate for Auto Backup**:
    * Once tested successfully, toggle the workflow to **Active**.
    * It will now run automatically every day at 7 PM UTC.
+
+### Using Restore Mode
+
+9. **Test Restore** (only after you have backups in GitHub):
+   * Click the **"When clicking 'Execute workflow'"** manual trigger node at the bottom.
+   * Click **"Test workflow"**.
+   * Monitor execution → All nodes in the restore section should turn green.
+   * Check your n8n workflows list → All workflows from GitHub should now be present.
+
+10. **When to Use Restore**:
+    * Setting up a new n8n instance.
+    * Recovering after data loss.
+    * Cloning workflows to another environment.
+    * Rolling back to a previous state (manually download older commits from GitHub first).
 
 ---
 
 ## Notes
+
+### Backup Mode Notes
 
 * **Smart Edit Detection**:
   * The workflow uses normalized JSON comparison to avoid unnecessary commits.
@@ -156,11 +189,64 @@ This workflow automatically detects new, edited, renamed, and deleted workflows 
   * All GitHub nodes have "Retry on Fail" enabled.
   * Continue on error is enabled for index file lookup.
 
+### Restore Mode Notes
+
+* **Workflow Creation**:
+  * Restored workflows are created as **new workflows** with new IDs.
+  * They are created in **inactive** state by default.
+  * Credentials must be reconnected manually after restore.
+
+* **Sequential Processing**:
+  * The "Loop Over Items" node processes workflows one at a time.
+  * Prevents race conditions and respects n8n API rate limits.
+  * For large numbers of workflows, this may take several minutes.
+
+* **Prerequisites**:
+  * The `workflows/` folder must exist in GitHub (created by first backup run).
+  * If restore is triggered before any backup, it will stop gracefully.
+
+* **Credential Handling**:
+  * Workflow JSON includes credential **IDs** but not actual credential data.
+  * After restore, you must:
+    * Recreate credentials in the new instance, OR
+    * Map old credential IDs to new ones, OR
+    * Manually reconnect credentials in each restored workflow.
+
+* **Duplicate Workflows**:
+  * If you restore to the same instance where workflows already exist, you'll get **duplicates**.
+  * Consider deleting existing workflows first, or use this feature intentionally for cloning.
+
+* **Active vs Inactive**:
+  * Backup preserves the workflow state (active/inactive) in JSON.
+  * However, restore creates workflows in inactive state.
+  * You'll need to manually activate them as needed.
+
+### General Notes
+
+* **Two Independent Workflows in One**:
+  * This is technically a single n8n workflow with two separate execution paths.
+  * Backup path triggers automatically (Schedule Trigger).
+  * Restore path triggers manually (Manual Trigger).
+  * They share GitHub and n8n API credentials but operate independently.
+
+* **Version Control Benefits**:
+  * GitHub provides full version history for all workflows.
+  * You can view diffs, roll back changes, and track who modified what.
+  * Use GitHub's web interface to browse workflow history.
+
+* **Security Considerations**:
+  * Workflow JSON may contain sensitive data in node parameters.
+  * Consider using a **private repository** for backups.
+  * Credential secrets are NOT included in backups (only credential IDs).
+  * Be cautious with workflow names if they contain sensitive information.
+
 ---
 
 ## Example Behavior
 
-* **Day 1 (First Run)**:
+### Backup Mode Examples
+
+* **Day 1 (First Backup Run)**:
   * Workflow triggers at 7 PM → No index.json found → Creates index.json.
   * Fetches 5 workflows from n8n → All marked as "CREATE".
   * Commits 6 files: `index.json` + 5 workflow files.
@@ -186,26 +272,77 @@ This workflow automatically detects new, edited, renamed, and deleted workflows 
   * Workflow triggers at 7 PM → Detects 2 DELETE + INDEX UPDATE.
   * Commits: 3 total (2 deletions, 1 index update).
 
+### Restore Mode Examples
+
+* **New Instance Setup**:
+  * You set up a fresh n8n instance on a new server.
+  * Configure GitHub credentials and repository details in the restore section.
+  * Manually trigger the restore workflow.
+  * All workflows from your GitHub backup are recreated in the new instance.
+
+* **Disaster Recovery**:
+  * Your n8n database is corrupted or accidentally deleted.
+  * After fixing the instance, trigger the restore workflow.
+  * All workflows are restored from GitHub to their last backed-up state.
+
+* **Environment Cloning**:
+  * You want to copy production workflows to a staging environment.
+  * Point the restore workflow to the production backup repository.
+  * Manually trigger restore → All production workflows are cloned to staging.
+
+* **Selective Restore**:
+  * You accidentally deleted a workflow and want only that one back.
+  * Go to GitHub → Download the specific workflow JSON.
+  * Manually import just that workflow in n8n (or modify restore to target specific files).
+
 ---
 
 ## Customization
 
-* **Change Schedule**:
+### Backup Mode Customizations
+
+* **Change Backup Schedule**:
   * Edit the **"Schedule Trigger"** node → modify `triggerAtHour` (currently `19` for 7 PM UTC).
   * Can also change to run weekly, monthly, etc.
 
-* **Change File Path**:
+* **Change File Storage Path**:
   * Modify `filePath` in GitHub nodes to store workflows in a different location (e.g., `backups/{{ $json.name }}.json`).
+  * Update the restore workflow's "List Workflow Files" node to match the new path.
 
-* **Add Repository Description**:
+* **Add Repository Documentation**:
   * You can add a step to create/update a README.md in your GitHub repo with backup metadata.
+  * Include information like last backup date, number of workflows, etc.
 
 * **Notification on Changes**:
-  * Add an "Send Email" node at the end to notify you when backups complete.
+  * Add a "Send Email" node at the end of the backup section to notify you when backups complete.
   * Connect after the final GitHub nodes with a summary of changes.
+  * Example: "Backed up 3 new workflows, edited 2, deleted 1".
 
 * **Multiple Repositories**:
   * Duplicate the workflow and change `repo_name` in "Set Github Data" to backup to different repos.
+  * Useful for separating production vs. development workflows.
+
+### Restore Mode Customizations
+
+* **Selective Restore**:
+  * Modify the "List Workflow Files" node to filter specific workflows by name pattern.
+  * Add an IF node to skip certain workflows during restore.
+
+* **Webhook Trigger for Restore**:
+  * Replace the manual trigger with a webhook trigger.
+  * Allows remote triggering of restore (e.g., from CI/CD pipelines).
+
+* **Pre-Restore Backup**:
+  * Add a step before restore to backup current n8n state first.
+  * Provides safety net before overwriting existing workflows.
+
+* **Post-Restore Activation**:
+  * Add an n8n node after "Create Workflow" to automatically activate restored workflows.
+  * Currently workflows are restored in inactive state.
+
+* **Conflict Handling**:
+  * Add duplicate detection before creating workflows.
+  * Option to skip, overwrite, or rename conflicting workflows.
 
 ---
 
